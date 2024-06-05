@@ -1,7 +1,6 @@
-drop procedure partition_advisor;
 create procedure partition_advisor (l_table varchar, l_table_schema varchar) as $$
 declare
-    l_cnt int8 := 0; -- количество записей
+    l_size_table int8 := 0; -- размер таблицы
     l_unique_cnt_column int8 := 0; --количество уникальных значений
     l_query varchar; -- запрос
     l_column varchar; -- колонки
@@ -70,10 +69,11 @@ begin
     raise notice '----------------------------------------------------------------------------';
     raise notice '';
 	
-	l_query := 'select count(*) from ' || l_table_schema || '.' || l_table;
-	execute l_query into l_cnt;
+	l_size_table = pg_relation_size(l_table_schema || '.' || l_table);
 
-	if l_cnt < 5000000 then 
+	if l_size_table = 0 then 
+		raise notice 'Таблица уже является партиционированной';
+	elsif l_size_table < 2147483648 then
 		raise notice 'Партиционирование не требуется';
 	else
 		l_query := 'select column_name, data_type, is_nullable
@@ -111,7 +111,7 @@ begin
             execute l_query into l_data_type, l_column_is_nullable;
            
            --если количество уникальных значений маленькое
-			if l_unique_cnt_column <= 10 then
+			if l_unique_cnt_column <= 20 then
 				raise notice 'Рекомендуется использовать партиционирование по значению колонки: %', l_columns[i];
 			
            		if l_columns[i] = l_most_column_attr then
@@ -696,7 +696,3 @@ begin
 	end if;
 end;
 $$ LANGUAGE plpgsql;
-
-call partition_advisor('purchases', 'public')
-
-
